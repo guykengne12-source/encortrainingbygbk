@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Exam sécurisé</title>
+
+<style>
+body { font-family: Arial; background:#0f172a; color:white; padding:20px; }
+.option { background:#334155; padding:10px; margin:10px; border-radius:8px; cursor:grab;}
+.correct { background:#16a34a !important;}
+.wrong { background:#dc2626 !important;}
+.topbar { display:flex; justify-content:space-between; }
+#timer { color:#facc15; }
+</style>
+</head>
+
+<body>
+
+<h2>Exam sécurisé</h2>
+
+<input id="username" placeholder="Nom">
+<button onclick="startExam()">Commencer</button>
+
+<div id="exam"></div>
+
+<script>
+
+const API = "YOUR_BACKEND_URL";
+
+let current = 0;
+let score = 0;
+let total = 0;
+let time = 90;
+let timer;
+
+/* GET TOTAL */
+async function getCount(){
+  let res = await fetch(API + "/api/count");
+  let data = await res.json();
+  total = data.count;
+}
+
+/* TIMER */
+function startTimer(){
+  clearInterval(timer);
+  time = 90;
+
+  timer = setInterval(()=>{
+    time--;
+    document.getElementById("timer").innerText = "Temps: " + time + "s";
+
+    if(time <= 0){
+      clearInterval(timer);
+      nextQuestion();
+    }
+  },1000);
+}
+
+/* LOAD QUESTION */
+async function loadQuestion(){
+
+  startTimer();
+
+  let res = await fetch(API + "/api/question/" + current);
+  let q = await res.json();
+
+  let html = `
+  <div class="topbar">
+    <div>Question ${current+1}/${total}</div>
+    <div id="timer"></div>
+  </div>
+  <p>${q.question}</p>
+  `;
+
+  if(q.type === "drag"){
+
+    html += `<div style="display:flex">`;
+
+    html += `<div id="items">`;
+    q.items.forEach(i=>{
+      html += `<div class="option" draggable="true" id="${i.id}">${i.text}</div>`;
+    });
+    html += `</div>`;
+
+    html += `<div id="zones">`;
+    q.zones.forEach(z=>{
+      html += `<div class="option zone" data-zone="${z.text}">${z.text}</div>`;
+    });
+    html += `</div>`;
+
+    html += `</div>`;
+
+  } else {
+
+    q.options.forEach((opt,i)=>{
+      html += `<div>
+      <input type="radio" name="answer" value="${i}">${opt}
+      </div>`;
+    });
+
+  }
+
+  html += `
+  <button onclick="validate()">Valider</button>
+  `;
+
+  document.getElementById("exam").innerHTML = html;
+
+  enableDrag();
+}
+
+/* DRAG */
+function enableDrag(){
+
+  document.querySelectorAll("[draggable]").forEach(el=>{
+    el.addEventListener("dragstart", e=>{
+      e.dataTransfer.setData("id", el.id);
+    });
+  });
+
+  document.querySelectorAll(".zone").forEach(zone=>{
+    zone.addEventListener("dragover", e=>e.preventDefault());
+
+    zone.addEventListener("drop", e=>{
+      e.preventDefault();
+      let id = e.dataTransfer.getData("id");
+      let el = document.getElementById(id);
+      zone.appendChild(el);
+    });
+  });
+}
+
+/* VALIDATE */
+async function validate(){
+
+  let payload = {index:current};
+
+  let selected = document.querySelector("input[name=answer]:checked");
+
+  if(selected){
+    payload.answer = parseInt(selected.value);
+  }
+
+  let dragAnswers = {};
+  document.querySelectorAll(".zone").forEach(z=>{
+    let name = z.dataset.zone;
+    let ids = Array.from(z.children).map(el=>el.id);
+    dragAnswers[name] = ids;
+  });
+
+  payload.dragAnswers = dragAnswers;
+
+  let res = await fetch(API + "/api/validate",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(payload)
+  });
+
+  let data = await res.json();
+
+  if(data.correct) score++;
+
+  nextQuestion();
+}
+
+/* NEXT */
+function nextQuestion(){
+  current++;
+
+  if(current < total){
+    loadQuestion();
+  } else {
+    finishExam();
+  }
+}
+
+/* FIN */
+function finishExam(){
+  clearInterval(timer);
+  alert("Score: " + score + "/" + total);
+}
+
+/* START */
+async function startExam(){
+  await getCount();
+  loadQuestion();
+}
+
+</script>
+
+</body>
+</html>
