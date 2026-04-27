@@ -5,9 +5,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* 🔒 QUESTIONS (CACHÉES) */
+/* 🔒 QUESTIONS */
 const questions = [
-
 {
 type:"drag",
 question:"Drag and drop the routing protocol characteristics",
@@ -22,22 +21,20 @@ zones:[
 {text:"EIGRP",answer:["dual","metrics"]}
 ]
 },
-
 {
 question:"Which protocol is used to send email?",
 options:["FTP","SMTP","HTTP","DNS"],
 answer:1,
 explanation:"SMTP is used to send emails"
 }
-
 ];
 
-/* 📊 TOTAL QUESTIONS */
+/* COUNT */
 app.get("/api/count",(req,res)=>{
   res.json({count:questions.length});
 });
 
-/* 📥 GET QUESTION SÉCURISÉE */
+/* GET QUESTION */
 app.get("/api/question/:index",(req,res)=>{
   const i = parseInt(req.params.index);
 
@@ -47,7 +44,6 @@ app.get("/api/question/:index",(req,res)=>{
 
   let q = JSON.parse(JSON.stringify(questions[i]));
 
-  /* ❌ supprimer réponses */
   delete q.answer;
 
   if(q.type === "drag"){
@@ -57,7 +53,7 @@ app.get("/api/question/:index",(req,res)=>{
   res.json(q);
 });
 
-/* ✅ VALIDATION */
+/* VALIDATION */
 app.post("/api/validate",(req,res)=>{
 
   const {index, answer, dragAnswers} = req.body;
@@ -80,6 +76,9 @@ app.post("/api/validate",(req,res)=>{
   res.json({correct});
 });
 
-app.listen(3000,()=>{
-  console.log("Server running on http://localhost:3000");
+/* ✅ IMPORTANT FIX RENDER */
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT,()=>{
+  console.log("Server running on port " + PORT);
 });
