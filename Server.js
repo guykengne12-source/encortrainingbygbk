@@ -36,13 +36,13 @@ app.get("/api/count",(req,res)=>{
 
 /* GET QUESTION */
 app.get("/api/question/:index",(req,res)=>{
-  const i = parseInt(req.params.index);
+  const i = Number(req.params.index);
 
-  if(i < 0 || i >= questions.length){
+  if(isNaN(i) || i < 0 || i >= questions.length){
     return res.status(404).json({error:"Not found"});
   }
 
-  let q = JSON.parse(JSON.stringify(questions[i]));
+  let q = structuredClone(questions[i]);
 
   delete q.answer;
 
@@ -57,15 +57,20 @@ app.get("/api/question/:index",(req,res)=>{
 app.post("/api/validate",(req,res)=>{
 
   const {index, answer, dragAnswers} = req.body;
-  const q = questions[index];
+
+  const q = questions[Number(index)];
+
+  if(!q){
+    return res.status(400).json({error:"Invalid question"});
+  }
 
   let correct = false;
 
   if(q.type === "drag"){
 
     correct = q.zones.every(zone=>{
-      let expected = zone.answer.sort().join(",");
-      let given = (dragAnswers[zone.text] || []).sort().join(",");
+      const expected = [...zone.answer].sort().join(",");
+      const given = ((dragAnswers?.[zone.text]) || []).sort().join(",");
       return expected === given;
     });
 
@@ -76,9 +81,9 @@ app.post("/api/validate",(req,res)=>{
   res.json({correct});
 });
 
-/* ✅ IMPORTANT FIX RENDER */
+/* 🚀 RENDER SAFE START */
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT,()=>{
-  console.log("Server running on port " + PORT);
+  console.log("Server running on port", PORT);
 });
