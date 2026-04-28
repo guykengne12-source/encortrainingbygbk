@@ -56,26 +56,43 @@ app.get("/api/question/:index",(req,res)=>{
 /* VALIDATION */
 app.post("/api/validate",(req,res)=>{
 
-  const {index, answers} = req.body;
-  const q = questions[index];
+  try {
 
-  let correct = false;
+    const {index, answer, dragAnswers} = req.body;
+    const q = questions[index];
 
-  if(q.type === "drag"){
+    let correct = false;
 
-    const given = answers?.value || {};
+    if(!q){
+      return res.status(400).json({error:"Question not found"});
+    }
 
-    correct = q.zones.every(zone=>{
-      let expected = zone.answer.sort().join(",");
-      let actual = (given[zone.text] || []).sort().join(",");
-      return expected === actual;
+    if(q.type === "drag"){
+
+      correct = q.zones.every(zone=>{
+        const expected = zone.answer.sort().join(",");
+        const given = (dragAnswers?.[zone.text] || []).sort().join(",");
+        return expected === given;
+      });
+
+    } else {
+
+      correct = answer === q.answer;
+    }
+
+    res.json({ correct });
+
+  } catch (err) {
+
+    console.log("ERROR VALIDATE:", err);
+
+    res.status(500).json({
+      error: "Server crash",
+      details: err.message
     });
 
-  } else {
-    correct = answers?.value === q.answer;
   }
 
-  res.json({correct});
 });
 
 /* 🚀 RENDER SAFE START */
