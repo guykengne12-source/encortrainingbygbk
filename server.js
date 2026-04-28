@@ -56,26 +56,22 @@ app.get("/api/question/:index",(req,res)=>{
 /* VALIDATION */
 app.post("/api/validate",(req,res)=>{
 
-  const {index, answer, dragAnswers} = req.body;
+  const {index, answers} = req.body;
 
-  const q = questions[Number(index)];
-
-  if(!q){
-    return res.status(400).json({error:"Invalid question"});
-  }
+  const q = questions[index];
 
   let correct = false;
 
   if(q.type === "drag"){
 
     correct = q.zones.every(zone=>{
-      const expected = [...zone.answer].sort().join(",");
-      const given = ((dragAnswers?.[zone.text]) || []).sort().join(",");
+      let expected = zone.answer.sort().join(",");
+      let given = (answers?.[zone.text] || []).sort().join(",");
       return expected === given;
     });
 
   } else {
-    correct = answer === q.answer;
+    correct = answers === q.answer;
   }
 
   res.json({correct});
