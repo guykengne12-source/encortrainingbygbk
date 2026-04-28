@@ -30,28 +30,32 @@ const API = "https://encor-training-by-gbk.onrender.com";
 let current = 0;
 let score = 0;
 let total = 0;
-let time = 90;
-let timer;
 
-/* GET TOTAL */
+let answers = {};
+let timer;
+let timeLeft = 60 * 30; // 30 min EXAM GLOBAL
+
+/* LOAD TOTAL */
 async function getCount(){
   let res = await fetch(API + "/api/count");
   let data = await res.json();
   total = data.count;
 }
 
-/* TIMER */
-function startTimer(){
-  clearInterval(timer);
-  time = 90;
-
+/* TIMER GLOBAL */
+function startGlobalTimer(){
   timer = setInterval(()=>{
-    time--;
-    document.getElementById("timer").innerText = "Temps: " + time + "s";
+    timeLeft--;
 
-    if(time <= 0){
+    let min = Math.floor(timeLeft / 60);
+    let sec = timeLeft % 60;
+
+    document.getElementById("timer").innerText =
+      `Temps restant: ${min}:${sec < 10 ? "0"+sec : sec}`;
+
+    if(timeLeft <= 0){
       clearInterval(timer);
-      nextQuestion();
+      finishExam();
     }
   },1000);
 }
@@ -59,32 +63,33 @@ function startTimer(){
 /* LOAD QUESTION */
 async function loadQuestion(){
 
-  startTimer();
-
   let res = await fetch(API + "/api/question/" + current);
   let q = await res.json();
 
   let html = `
-  <div class="topbar">
-    <div>Question ${current+1}/${total}</div>
-    <div id="timer"></div>
-  </div>
-  <p>${q.question}</p>
+    <div class="topbar">
+      <div>Question ${current+1}/${total}</div>
+      <div id="timer"></div>
+    </div>
+
+    <p>${q.question}</p>
   `;
 
   if(q.type === "drag"){
 
-    html += `<div style="display:flex">`;
+    html += `<div style="display:flex;gap:20px">`;
 
-    html += `<div id="items">`;
+    html += `<div>`;
     q.items.forEach(i=>{
       html += `<div class="option" draggable="true" id="${i.id}">${i.text}</div>`;
     });
     html += `</div>`;
 
-    html += `<div id="zones">`;
+    html += `<div>`;
     q.zones.forEach(z=>{
-      html += `<div class="option zone" data-zone="${z.text}">${z.text}</div>`;
+      html += `<div class="option zone" data-zone="${z.text}">
+        ${z.text}
+      </div>`;
     });
     html += `</div>`;
 
@@ -93,81 +98,57 @@ async function loadQuestion(){
   } else {
 
     q.options.forEach((opt,i)=>{
-      html += `<div>
-      <input type="radio" name="answer" value="${i}">${opt}
-      </div>`;
+      let checked = answers[current] == i ? "checked" : "";
+      html += `
+        <div>
+          <input type="radio" name="answer" value="${i}" ${checked}>
+          ${opt}
+        </div>
+      `;
     });
 
   }
 
-  html += `
-  <button onclick="validate()">Valider</button>
-  `;
+  html += `<br><button onclick="saveAnswer()">Valider</button>`;
 
   document.getElementById("exam").innerHTML = html;
 
   enableDrag();
 }
 
-/* DRAG */
-function enableDrag(){
+/* SAVE ANSWER */
+function saveAnswer(){
 
-  document.querySelectorAll("[draggable]").forEach(el=>{
-    el.addEventListener("dragstart", e=>{
-      e.dataTransfer.setData("id", el.id);
+  let qType = document.querySelector(".zone") ? "drag" : "mcq";
+
+  if(qType === "mcq"){
+
+    let selected = document.querySelector("input[name=answer]:checked");
+
+    if(selected){
+      answers[current] = {
+        type: "mcq",
+        value: parseInt(selected.value)
+      };
+    }
+
+  } else {
+
+    let dragAnswers = {};
+
+    document.querySelectorAll(".zone").forEach(z=>{
+      let name = z.dataset.zone;
+      dragAnswers[name] =
+        Array.from(z.children).map(el=>el.id);
     });
-  });
 
-  document.querySelectorAll(".zone").forEach(zone=>{
-
-    zone.addEventListener("dragover", e=>{
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-    });
-
-    zone.addEventListener("drop", e=>{
-      e.preventDefault();
-
-      let id = e.dataTransfer.getData("id");
-      let el = document.getElementById(id);
-
-      if(el){
-        zone.appendChild(el);
-      }
-    });
-
-  });
-}
-
-/* VALIDATE */
-async function validate(){
-
-  let payload = {index:current};
-
-  let selected = document.querySelector("input[name=answer]:checked");
-
-  if(selected){
-    payload.answer = parseInt(selected.value);
+    answers[current] = {
+      type: "drag",
+      value: dragAnswers
+    };
   }
 
-  let dragAnswers = {};
-  document.querySelectorAll(".zone").forEach(z=>{
-    let name = z.dataset.zone;
-    let ids = Array.from(z.children).map(el=>el.id);
-    dragAnswers[name] = ids;
-  });
-
-  payload.dragAnswers = dragAnswers;
-
-  let res = await fetch(API + "/api/validate",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(payload)
-  });
-
-  let data = await res.json();
-
-  if(data.correct) score++;
+  localStorage.setItem("exam_answers", JSON.stringify(answers));
 
   nextQuestion();
 }
@@ -183,15 +164,37 @@ function nextQuestion(){
   }
 }
 
-/* FIN */
-function finishExam(){
+/* FIN EXAM */
+async function finishExam(){
   clearInterval(timer);
-  alert("Score: " + score + "/" + total);
+
+  let res = await fetch(API + "/api/validate",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      index: current,
+      answers: answers
+    })
+  });
+
+  document.getElementById("exam").innerHTML = `
+    <h2>Examen terminé</h2>
+    <p>Score: ${score}</p>
+  `;
+
+  localStorage.removeItem("exam_answers");
 }
 
 /* START */
 async function startExam(){
   await getCount();
+
+  let saved = localStorage.getItem("exam_answers");
+  if(saved){
+    answers = JSON.parse(saved);
+  }
+
+  startGlobalTimer();
   loadQuestion();
 }
 

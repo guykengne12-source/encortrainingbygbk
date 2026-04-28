@@ -57,21 +57,22 @@ app.get("/api/question/:index",(req,res)=>{
 app.post("/api/validate",(req,res)=>{
 
   const {index, answers} = req.body;
-
   const q = questions[index];
 
   let correct = false;
 
   if(q.type === "drag"){
 
+    const given = answers?.value || {};
+
     correct = q.zones.every(zone=>{
       let expected = zone.answer.sort().join(",");
-      let given = (answers?.[zone.text] || []).sort().join(",");
-      return expected === given;
+      let actual = (given[zone.text] || []).sort().join(",");
+      return expected === actual;
     });
 
   } else {
-    correct = answers === q.answer;
+    correct = answers?.value === q.answer;
   }
 
   res.json({correct});
